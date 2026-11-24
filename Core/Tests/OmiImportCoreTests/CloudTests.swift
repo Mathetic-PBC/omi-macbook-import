@@ -45,8 +45,8 @@ final class CloudTests: XCTestCase {
             structured: .init(title: title ?? "Talk \(n)", overview: "About thing \(n).", emoji: "💬", category: "personal",
                               actionItems: [.init(description: "Follow up on \(n)", completed: n % 2 == 0)]),
             transcriptSegments: [
-                .init(text: "Hello there.", speakerID: 0, speakerName: "Hudson", start: 0, end: 1.5),
-                .init(text: "How was it?", speakerID: 0, speakerName: "Hudson", start: 1.5, end: 3),
+                .init(text: "Hello there.", speakerID: 0, speakerName: "Ana", start: 0, end: 1.5),
+                .init(text: "How was it?", speakerID: 0, speakerName: "Ana", start: 1.5, end: 3),
                 .init(text: "Good.", speakerID: 1, speakerName: nil, start: 65, end: 66),
             ],
             folderName: nil, geolocation: nil)
@@ -128,7 +128,7 @@ final class CloudTests: XCTestCase {
 
         ## Transcript
 
-        **Hudson** · 0:00
+        **Ana** · 0:00
         Hello there. How was it?
 
         **Speaker 1** · 1:05
