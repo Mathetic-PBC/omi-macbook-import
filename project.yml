@@ -1,0 +1,53 @@
+name: OmiImport
+options:
+  bundleIdPrefix: com.mathetic
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+packages:
+  OmiImportCore:
+    path: Core
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  OmiImport:
+    type: application
+    platform: macOS
+    sources:
+      - path: App/Sources
+      - path: App/Resources/engelbart-library.cjs
+        buildPhase: resources
+    dependencies:
+      - package: OmiImportCore
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Omi Import
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSUIElement: true
+        LSApplicationCategoryType: public.app-category.productivity
+        NSBluetoothAlwaysUsageDescription: Omi Import connects to your Omi pendant over Bluetooth to copy the recordings it has stored onto this Mac.
+        NSHumanReadableCopyright: Copyright © 2026 Mathetic PBC
+    entitlements:
+      path: App/OmiImport.entitlements
+      properties:
+        com.apple.security.device.bluetooth: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mathetic.OmiImport
+        PRODUCT_NAME: OmiImport
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""
+        GENERATE_INFOPLIST_FILE: NO
+        COMBINE_HIDPI_IMAGES: YES
+      configs:
+        # A debug build is a different app to macOS, with its own identifier,
+        # so it never stands in for the installed copy.
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: com.mathetic.OmiImport.debug
