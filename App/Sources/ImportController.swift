@@ -47,6 +47,8 @@ final class ImportController: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor in self?.addToEngelbartIfWaiting() }
         })
+        // Engelbart may have closed while this app wasn't running.
+        addToEngelbartIfWaiting()
         let link = PendantLink(controller: self)
         pendant = link
         link.start(folder: settings.destinationURL, pendant: settings.pendant.flatMap(UUID.init(uuidString:)))
