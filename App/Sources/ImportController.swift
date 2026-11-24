@@ -10,7 +10,11 @@ final class ImportController: ObservableObject {
     static let shared = ImportController()
 
     @Published var settings = Settings.load() { didSet { if settings != oldValue { settings.save() } } }
-    @Published private(set) var recordings: [Recording] = []
+    @Published private(set) var rows: [Row] = []
+    /// What Omi's cloud last said; nil with no key.
+    @Published private(set) var cloudStatus: String?
+    @Published private(set) var cloudProblem = false
+    @Published private(set) var cloudConnected = CloudKey.value?.isEmpty == false
     @Published private(set) var pendantStatus = "Not started"
     @Published private(set) var progress: Progress?
     @Published private(set) var isTransferring = false
@@ -25,6 +29,16 @@ final class ImportController: ObservableObject {
         var fraction: Double { total > 0 ? min(1, Double(done) / Double(total)) : 0 }
     }
 
+    /// One line of the Recordings pane: something copied from the pendant
+    /// or from Omi's cloud.
+    struct Row: Identifiable, Equatable {
+        var id: String { file }
+        var file: String
+        var start: Date
+        var seconds: Double
+        var from: String
+    }
+
     struct Question: Equatable {
         var title: String
         var message: String
@@ -36,6 +50,7 @@ final class ImportController: ObservableObject {
     }
 
     private var pendant: PendantLink?
+    private var cloud: CloudLink?
     private var observers: [NSObjectProtocol] = []
 
     func start() {
@@ -49,6 +64,13 @@ final class ImportController: ObservableObject {
         })
         // Engelbart may have closed while this app wasn't running.
         addToEngelbartIfWaiting()
+        let cloud = CloudLink(controller: self)
+        self.cloud = cloud
+        cloud.start()
+        #if DEBUG
+        // A test run that must not ask for Bluetooth.
+        if ProcessInfo.processInfo.environment["OMI_IMPORT_NO_BLUETOOTH"] == "1" { return }
+        #endif
         let link = PendantLink(controller: self)
         pendant = link
         link.start(folder: settings.destinationURL, pendant: settings.pendant.flatMap(UUID.init(uuidString:)))
@@ -104,6 +126,7 @@ final class ImportController: ObservableObject {
         refreshEngelbartStatus()
         askAboutEngelbart()
         pendant?.setFolder(url)
+        cloud?.reset()
     }
 
     func openFolder() {
@@ -111,9 +134,9 @@ final class ImportController: ObservableObject {
         NSWorkspace.shared.open(url)
     }
 
-    func reveal(_ recording: Recording) {
+    func reveal(_ row: Row) {
         guard let folder = settings.destinationURL else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([folder.appendingPathComponent(recording.file)])
+        NSWorkspace.shared.activateFileViewerSelecting([folder.appendingPathComponent(row.file)])
     }
 
     // MARK: Engelbart
@@ -211,7 +234,10 @@ final class ImportController: ObservableObject {
 
     var canImportNow: Bool { settings.destination != nil && !isTransferring }
 
-    func importNow() { pendant?.importNow() }
+    func importNow() {
+        pendant?.importNow()
+        cloud?.reset()
+    }
 
     func forgetPendant() {
         pendant?.forget()
@@ -237,8 +263,40 @@ final class ImportController: ObservableObject {
     func didImport(_ written: [Recording]) { reloadLedger() }
 
     func reloadLedger() {
-        guard let folder = settings.destinationURL else { recordings = []; return }
-        recordings = Ledger.load(from: RecordingLayout(folder: folder).ledgerURL).recordings.sorted { $0.start > $1.start }
+        guard let folder = settings.destinationURL else { rows = []; return }
+        let layout = RecordingLayout(folder: folder)
+        let pendant = Ledger.load(from: layout.ledgerURL).recordings.map {
+            Row(file: $0.file, start: $0.start, seconds: $0.seconds, from: "Pendant")
+        }
+        let cloud = CloudState.load(from: layout.cloudStateURL).items.values.map {
+            Row(file: $0.file, start: $0.start, seconds: $0.seconds, from: "Cloud")
+        }
+        rows = (pendant + cloud).sorted { $0.start > $1.start }
+    }
+
+    // MARK: Omi's cloud
+
+    func setCloudStatus(_ text: String?, problem: Bool = false) {
+        cloudStatus = text
+        cloudProblem = problem
+    }
+
+    /// Keeps the developer key and checks the cloud with it at once.
+    func connectCloud(key: String) {
+        let key = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+        guard CloudKey.save(key) else {
+            setCloudStatus("The key couldn't be saved to your keychain.", problem: true)
+            return
+        }
+        cloudConnected = true
+        cloud?.reset()
+    }
+
+    func disconnectCloud() {
+        CloudKey.remove()
+        cloudConnected = false
+        setCloudStatus(nil)
     }
 
     #if DEBUG
@@ -247,6 +305,10 @@ final class ImportController: ObservableObject {
         reloadLedger()
         refreshEngelbartStatus()
         pendantStatus = ProcessInfo.processInfo.environment["OMI_IMPORT_STATUS"] ?? "Looking for your pendant"
+        if let status = ProcessInfo.processInfo.environment["OMI_IMPORT_CLOUD_STATUS"] {
+            cloudConnected = true
+            cloudStatus = status
+        }
     }
     #endif
 }

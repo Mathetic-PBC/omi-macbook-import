@@ -1,8 +1,9 @@
 # omi-macbook-import
 
 Copies what an [Omi](https://github.com/BasedHardware/omi) pendant recorded
-onto a Mac over Bluetooth, with no phone and no Omi account in between, and
-puts the folder it copies into in [Engelbart](https://github.com/Mathetic-PBC/engelbart-canvas)'s
+onto a Mac: straight off the pendant over Bluetooth, with no phone in
+between, and from Omi's cloud for what the phone app already took. It puts
+the folder it copies into in [Engelbart](https://github.com/Mathetic-PBC/engelbart-canvas)'s
 library.
 
 - **Copying.** While the app is running and the pendant is near the Mac,
@@ -12,6 +13,11 @@ library.
   as the pendant encoded it, in an Ogg Opus file (`.opus`, about 14 MB an
   hour), and a short markdown note with when it started, how long it is and
   a link to the audio.
+- **Omi's cloud.** What the Omi app on a phone already took off the pendant
+  is in Omi's cloud. With a developer key, each of those conversations is
+  copied into the same folder as a markdown note: title, summary, action
+  items and the transcript with speakers. The cloud is checked when the Mac
+  starts or wakes and every half hour.
 - **Engelbart.** If Engelbart is on the Mac, setup asks whether to add the
   folder to its library. It is added once, as a folder, by reference:
   Engelbart lists what is in it live, so every later recording is in reach
@@ -43,7 +49,12 @@ it. A waveform appears in the menu bar and the setup window opens.
    one device at a time) and have the pendant on near the Mac. macOS asks
    once for Bluetooth access. The first Omi found is remembered, and from
    then on only that one is used. **Forget** lets another be found.
-4. **Open at login,** so copying happens without thinking about it.
+4. **Omi's cloud.** Make a key at [app.omi.me/developers](https://app.omi.me/developers)
+   with the `conversations:read` scope, paste it in and click **Connect**.
+   The key is kept in the login keychain. The first check walks the whole
+   history; Omi allows 25 transcript requests an hour, so a long history
+   comes in over a few hours.
+5. **Open at login,** so copying happens without thinking about it.
 
 ## How it works
 
@@ -65,6 +76,21 @@ rule. A recording is written once it has been quiet for a minute.
         2026-11-23 14-05-12.opus    the audio, as the pendant encoded it
         2026-11-23 14-05-12.md      when, how long, a link to the audio
       .omi-import/                  the journal and the list of what was imported
+
+**Omi's cloud.** The Developer API's `GET /v1/dev/user/conversations` gives
+conversations newest first, with transcripts on request. The app walks back
+through them a page at a time, each page starting at the oldest
+conversation of the one before, and saves where it got to after every page.
+After that, each check looks again at the last day, since a conversation
+appears once Omi has processed it and its summary and speaker names can
+change for a while. A conversation is one note, named for when it began and
+its title, and is written again only when the cloud's copy changed and the
+note is still as the app wrote it: a note you wrote in is left alone, and
+one you deleted stays deleted. The API gives no audio.
+
+    Omi/
+      2026-11-22/
+        2026-11-22 18-30-05 Dinner plans.md
 
 **The clock.** The pendant has no clock of its own and this Mac is the only
 thing that sets it. After the pendant restarts away from the Mac its times
@@ -91,7 +117,10 @@ elsewhere.
 - The pendant connects to one device at a time and keeps one position in its
   storage. With the Omi app open on a phone, this Mac can't reach the
   pendant, and what the Omi app copies never comes here.
-- No transcripts and no speaker names. This only moves the audio.
+- Audio from the pendant comes with no transcript and no speaker names.
+  Conversations from Omi's cloud come with a transcript and no audio.
+- The cloud side was tested against a stand-in server written from the
+  API's documentation and the backend's source, not against Omi's own.
 
 ## Develop
 

@@ -57,7 +57,7 @@ private struct SetupPane: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Copy what your Omi recorded onto this Mac")
                         .font(.title2.weight(.semibold))
-                    Text("Whenever the pendant is near, what it has stored is copied into a folder you choose, one audio file and one note for each recording. Nothing goes through Omi's servers.")
+                    Text("What the pendant has stored is copied straight off it into a folder you choose, an audio file and a note for each recording. What the Omi app already took can come from Omi's cloud, as notes.")
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -105,12 +105,20 @@ private struct SetupPane: View {
             }
 
             Section {
+                CloudRow()
+            } header: {
+                Text("\(controller.engelbart != nil ? 4 : 3). Omi's cloud")
+            } footer: {
+                Text("What the Omi app on your phone already took off the pendant is in Omi's cloud. With a key from [app.omi.me/developers](https://app.omi.me/developers) that can read conversations, each one is copied here as a note with its transcript. Omi's cloud doesn't give out the audio.")
+            }
+
+            Section {
                 Toggle("Open at login", isOn: Binding(get: { loginOn }, set: setLogin))
                 if let loginError { Text(loginError).foregroundStyle(.red).font(.callout) }
             } header: {
-                Text("\(controller.engelbart != nil ? 4 : 3). Keep it running")
+                Text("\(controller.engelbart != nil ? 5 : 4). Keep it running")
             } footer: {
-                Text("Copying happens on its own every 15 minutes while the app is running and the pendant is near this Mac.")
+                Text("While the app is running, the pendant is copied from every 15 minutes when it is near, and Omi's cloud is checked when the Mac starts or wakes and every half hour.")
             }
         }
         .formStyle(.grouped)
@@ -161,6 +169,37 @@ private struct EngelbartRow: View {
     }
 }
 
+private struct CloudRow: View {
+    @EnvironmentObject private var controller: ImportController
+    @State private var key = ""
+
+    var body: some View {
+        if controller.cloudConnected {
+            LabeledContent {
+                Button("Disconnect") { controller.disconnectCloud() }
+            } label: {
+                Text(controller.cloudStatus ?? "Connected")
+                    .foregroundStyle(controller.cloudProblem ? Color.red : Color.primary)
+            }
+        } else {
+            LabeledContent {
+                Button("Connect") {
+                    controller.connectCloud(key: key)
+                    key = ""
+                }
+                .disabled(key.trimmingCharacters(in: .whitespaces).isEmpty || controller.settings.destination == nil)
+            } label: {
+                SecureField("Developer key", text: $key, prompt: Text("omi_dev_…"))
+                    .labelsHidden()
+                    .textFieldStyle(.roundedBorder)
+            }
+            if let status = controller.cloudStatus, controller.cloudProblem {
+                Text(status).foregroundStyle(.red).font(.callout)
+            }
+        }
+    }
+}
+
 private struct PendantRow: View {
     @EnvironmentObject private var controller: ImportController
 
@@ -185,11 +224,22 @@ private struct PendantRow: View {
 private struct RecordingsPane: View {
     @EnvironmentObject private var controller: ImportController
 
+    /// A file's name as the table shows it: a note that has a title is
+    /// shown by it, since the row already says when.
+    static func shown(_ file: String) -> String {
+        let name = (file as NSString).lastPathComponent
+        guard let match = name.range(of: #"^\d{4}-\d\d-\d\d \d\d-\d\d-\d\d( \d+)? (?=\D)"#, options: .regularExpression) else { return name }
+        return String(name[match.upperBound...])
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(controller.pendantStatus)
+                    if let cloud = controller.cloudStatus {
+                        Text("Cloud: \(cloud)").font(.callout).foregroundStyle(.secondary)
+                    }
                     if let progress = controller.progress {
                         ProgressView(value: progress.fraction)
                             .frame(maxWidth: 320)
@@ -204,24 +254,24 @@ private struct RecordingsPane: View {
             }
             .padding(16)
 
-            if controller.recordings.isEmpty {
+            if controller.rows.isEmpty {
                 Spacer()
                 Text(controller.settings.destination == nil ? "Choose a folder in Setup first." : "Nothing imported yet.")
                     .foregroundStyle(.secondary)
                 Spacer()
             } else {
-                Table(controller.recordings) {
+                Table(controller.rows) {
                     TableColumn("Started") { Text($0.start.formatted(date: .abbreviated, time: .shortened)).lineLimit(1) }
-                        .width(min: 150, ideal: 190)
-                    TableColumn("Length") { Text(RecordingLayout.length($0.seconds)).lineLimit(1) }
+                        .width(min: 150, ideal: 180)
+                    TableColumn("Length") { Text($0.seconds > 0 ? RecordingLayout.length($0.seconds) : "").lineLimit(1) }
                         .width(90)
-                    TableColumn("Size") { Text(formatBytes($0.bytes)).lineLimit(1) }
+                    TableColumn("From") { Text($0.from).lineLimit(1) }
                         .width(70)
                     TableColumn("File") { recording in
                         Button { controller.reveal(recording) } label: {
-                            Text((recording.file as NSString).lastPathComponent)
+                            Text(Self.shown(recording.file))
                                 .lineLimit(1)
-                                .truncationMode(.middle)
+                                .truncationMode(.tail)
                         }
                         .buttonStyle(.link)
                     }

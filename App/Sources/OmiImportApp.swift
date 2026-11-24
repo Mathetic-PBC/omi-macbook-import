@@ -31,6 +31,7 @@ private struct MenuContent: View {
 
     var body: some View {
         Text(controller.pendantStatus)
+        if let cloud = controller.cloudStatus { Text("Cloud: \(cloud)") }
         if let last = controller.settings.lastImport {
             Text("Last checked \(last.formatted(.relative(presentation: .named)))")
         }
@@ -119,6 +120,9 @@ extension AppDelegate {
     static func snapshotSettings(to path: String) {
         ImportController.shared.loadForSnapshot()
         showSettings()
+        if let height = ProcessInfo.processInfo.environment["OMI_IMPORT_HEIGHT"].flatMap(Double.init) {
+            settingsWindow?.setContentSize(NSSize(width: 820, height: height))
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             guard let view = settingsWindow?.contentView?.superview ?? settingsWindow?.contentView,
                   let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds)
