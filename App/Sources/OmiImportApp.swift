@@ -30,13 +30,13 @@ private struct MenuContent: View {
     @EnvironmentObject private var controller: ImportController
 
     var body: some View {
-        Text(controller.pendantStatus)
+        Text("Phone: \(controller.phoneStatus ?? "Not listening")")
         if let cloud = controller.cloudStatus { Text("Cloud: \(cloud)") }
         if let last = controller.settings.lastImport {
-            Text("Last checked \(last.formatted(.relative(presentation: .named)))")
+            Text("Last arrival \(last.formatted(.relative(presentation: .named)))")
         }
         Divider()
-        Button("Import Now") { controller.importNow() }
+        Button("Check Omi's Cloud") { controller.importNow() }
             .disabled(!controller.canImportNow)
         Button("Open Folder") { controller.openFolder() }
             .disabled(controller.settings.destination == nil)

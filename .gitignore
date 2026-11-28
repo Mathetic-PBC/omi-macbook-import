@@ -5,3 +5,4 @@ DerivedData/
 .DS_Store
 xcuserdata/
 App/Info.plist
+Phone/Info.plist

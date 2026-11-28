@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: com.mathetic
   deploymentTarget:
     macOS: "14.0"
+    iOS: "17.0"
   createIntermediateGroups: true
 packages:
   OmiImportCore:
@@ -30,12 +31,10 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
         LSApplicationCategoryType: public.app-category.productivity
-        NSBluetoothAlwaysUsageDescription: Omi Import connects to your Omi pendant over Bluetooth to copy the recordings it has stored onto this Mac.
+        NSLocalNetworkUsageDescription: Omi Import lets Omi Relay on your iPhone find this Mac to send it recordings.
+        NSBonjourServices:
+          - _omi-import._tcp
         NSHumanReadableCopyright: Copyright © 2026 Mathetic PBC
-    entitlements:
-      path: App/OmiImport.entitlements
-      properties:
-        com.apple.security.device.bluetooth: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mathetic.OmiImport
@@ -51,3 +50,41 @@ targets:
         # so it never stands in for the installed copy.
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: com.mathetic.OmiImport.debug
+
+  # The phone app: takes recordings off the pendant and hands them to the Mac.
+  OmiRelay:
+    type: application
+    platform: iOS
+    sources:
+      - path: Phone/Sources
+      - path: Phone/Assets.xcassets
+    dependencies:
+      - package: OmiImportCore
+    info:
+      path: Phone/Info.plist
+      properties:
+        CFBundleDisplayName: Omi Relay
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        # Lets iOS wake the app whenever the pendant has something to say.
+        UIBackgroundModes:
+          - bluetooth-central
+        NSBluetoothAlwaysUsageDescription: Omi Relay connects to your Omi pendant over Bluetooth to take the recordings it has stored.
+        NSLocalNetworkUsageDescription: Omi Relay finds your Mac on this network to send it your recordings.
+        NSBonjourServices:
+          - _omi-import._tcp
+        # Only the encryption iOS itself provides.
+        ITSAppUsesNonExemptEncryption: false
+        NSHumanReadableCopyright: Copyright © 2026 Mathetic PBC
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mathetic.OmiRelay
+        PRODUCT_NAME: OmiRelay
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

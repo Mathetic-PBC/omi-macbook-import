@@ -1,4 +1,5 @@
 import Foundation
+import Security
 
 enum Paths {
     /// The app's own settings and log. OMI_IMPORT_HOME moves them, which is
@@ -17,7 +18,7 @@ enum Paths {
     static var log: URL { home.appendingPathComponent("omi-import.log") }
 }
 
-/// A plain text log of what the pendant said and what was done about it.
+/// A plain text log of what arrived and what was done about it.
 enum Log {
     private static let queue = DispatchQueue(label: "com.mathetic.OmiImport.log")
     private static let limit = 1024 * 1024
@@ -50,6 +51,46 @@ enum Log {
     }
 }
 
+/// Something kept in the login keychain and nowhere else.
+struct Secret {
+    let service: String
+    let account: String
+    /// A debug build never touches the keychain: its value comes from this
+    /// environment variable, for a test run.
+    let debugVariable: String
+
+    #if DEBUG
+    var value: String? { ProcessInfo.processInfo.environment[debugVariable] }
+    func save(_ value: String) -> Bool { false }
+    func remove() {}
+    #else
+    private var query: [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
+    }
+
+    var value: String? {
+        var query = query
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: AnyObject?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    func save(_ value: String) -> Bool {
+        remove()
+        var item = query
+        item[kSecValueData as String] = Data(value.utf8)
+        item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        return SecItemAdd(item as CFDictionary, nil) == errSecSuccess
+    }
+
+    func remove() {
+        SecItemDelete(query as CFDictionary)
+    }
+    #endif
+}
+
 /// What the person chose in setup.
 struct Settings: Codable, Equatable {
     enum EngelbartChoice: String, Codable { case undecided, yes, no }
@@ -60,9 +101,7 @@ struct Settings: Codable, Equatable {
     /// The folder Engelbart's library row was made for, and the row.
     var engelbartFolder: String?
     var engelbartRowID: String?
-    /// The pendant this Mac drains, by the identifier macOS gives it.
-    var pendant: String?
-    var pendantName: String?
+    /// When something last arrived, from the phone or the cloud.
     var lastImport: Date?
 
     var destinationURL: URL? { destination.map { URL(fileURLWithPath: $0, isDirectory: true) } }

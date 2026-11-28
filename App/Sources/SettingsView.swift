@@ -55,9 +55,9 @@ private struct SetupPane: View {
         Form {
             Section {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Copy what your Omi recorded onto this Mac")
+                    Text("Keep what your Omi recorded on this Mac")
                         .font(.title2.weight(.semibold))
-                    Text("What the pendant has stored is copied straight off it into a folder you choose, an audio file and a note for each recording. What the Omi app already took can come from Omi's cloud, as notes.")
+                    Text("Omi Relay on your iPhone takes recordings off the pendant and sends them here, into a folder you choose: an audio file and a note for each. What the old Omi app took can come from Omi's cloud, as notes.")
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -97,11 +97,11 @@ private struct SetupPane: View {
             }
 
             Section {
-                PendantRow()
+                PhoneRow()
             } header: {
-                Text("\(controller.engelbart != nil ? 3 : 2). Pendant")
+                Text("\(controller.engelbart != nil ? 3 : 2). Your phone")
             } footer: {
-                Text("The pendant connects to one device at a time. Quit the Omi app on your phone, or this Mac can't reach it.")
+                Text("Type this code into Omi Relay on your iPhone, once. The phone finds this Mac on the same Wi-Fi and sends each recording straight to it, encrypted with the code; nothing goes through anyone's server. It keeps a recording until this Mac has it.")
             }
 
             Section {
@@ -109,7 +109,7 @@ private struct SetupPane: View {
             } header: {
                 Text("\(controller.engelbart != nil ? 4 : 3). Omi's cloud")
             } footer: {
-                Text("What the Omi app on your phone already took off the pendant is in Omi's cloud. With a key from [app.omi.me/developers](https://app.omi.me/developers) that can read conversations, each one is copied here as a note with its transcript. Omi's cloud doesn't give out the audio.")
+                Text("What the Omi app took off the pendant before Omi Relay did is in Omi's cloud. With a key from [app.omi.me/developers](https://app.omi.me/developers) that can read conversations, each one is copied here as a note with its transcript. Omi's cloud doesn't give out the audio.")
             }
 
             Section {
@@ -118,7 +118,7 @@ private struct SetupPane: View {
             } header: {
                 Text("\(controller.engelbart != nil ? 5 : 4). Keep it running")
             } footer: {
-                Text("While the app is running, the pendant is copied from every 15 minutes when it is near, and Omi's cloud is checked when the Mac starts or wakes and every half hour.")
+                Text("While the app is running, the phone can send whenever it finds this Mac, and Omi's cloud is checked when the Mac starts or wakes and every half hour.")
             }
         }
         .formStyle(.grouped)
@@ -200,21 +200,38 @@ private struct CloudRow: View {
     }
 }
 
-private struct PendantRow: View {
+private struct PhoneRow: View {
     @EnvironmentObject private var controller: ImportController
+    @State private var confirming = false
 
     var body: some View {
-        LabeledContent {
-            HStack {
-                if controller.settings.pendant != nil {
-                    Button("Forget") { controller.forgetPendant() }
+        if let code = controller.phoneCode {
+            LabeledContent {
+                HStack {
+                    Button("Copy") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(Pairing.display(code), forType: .string)
+                    }
+                    Button("New Code…") { confirming = true }
+                }
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(Pairing.display(code))
+                        .font(.system(.body, design: .monospaced))
+                        .textSelection(.enabled)
+                    Text(controller.phoneStatus ?? "Not listening")
+                        .font(.callout)
+                        .foregroundStyle(controller.phoneProblem ? Color.red : Color.secondary)
                 }
             }
-        } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(controller.settings.pendantName ?? "No pendant yet")
-                Text(controller.pendantStatus).font(.callout).foregroundStyle(.secondary)
+            .confirmationDialog("Make a new pairing code?", isPresented: $confirming) {
+                Button("New Code") { controller.newPhoneCode() }
+            } message: {
+                Text("Your phone stops being able to send until you type the new code into it.")
             }
+        } else {
+            Text(controller.settings.destination == nil ? "Choose a folder first" : "No pairing code")
+                .foregroundStyle(.secondary)
         }
     }
 }
@@ -236,7 +253,8 @@ private struct RecordingsPane: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(controller.pendantStatus)
+                    Text("Phone: \(controller.phoneStatus ?? "Not listening")")
+                        .foregroundStyle(controller.phoneProblem ? Color.red : Color.primary)
                     if let cloud = controller.cloudStatus {
                         Text("Cloud: \(cloud)").font(.callout).foregroundStyle(.secondary)
                     }
@@ -248,15 +266,14 @@ private struct RecordingsPane: View {
                 Spacer()
                 Button("Open Folder") { controller.openFolder() }
                     .disabled(controller.settings.destination == nil)
-                Button("Import Now") { controller.importNow() }
-                    .buttonStyle(.borderedProminent)
+                Button("Check Omi's Cloud") { controller.importNow() }
                     .disabled(!controller.canImportNow)
             }
             .padding(16)
 
             if controller.rows.isEmpty {
                 Spacer()
-                Text(controller.settings.destination == nil ? "Choose a folder in Setup first." : "Nothing imported yet.")
+                Text(controller.settings.destination == nil ? "Choose a folder in Setup first." : "Nothing here yet.")
                     .foregroundStyle(.secondary)
                 Spacer()
             } else {

@@ -1,46 +1,9 @@
 import AppKit
 import Foundation
 import OmiImportCore
-import Security
 
 /// The Omi developer key, kept in the login keychain and nowhere else.
-enum CloudKey {
-    private static let service = "com.mathetic.OmiImport.cloud"
-    private static let account = "omi-developer-key"
-
-    #if DEBUG
-    /// A debug build never touches the keychain: its key comes from the
-    /// environment, for a test server.
-    static var value: String? { ProcessInfo.processInfo.environment["OMI_IMPORT_CLOUD_KEY"] }
-    static func save(_ key: String) -> Bool { false }
-    static func remove() {}
-    #else
-    private static var query: [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
-    }
-
-    static var value: String? {
-        var query = query
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-        var result: AnyObject?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let data = result as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-
-    static func save(_ key: String) -> Bool {
-        remove()
-        var item = query
-        item[kSecValueData as String] = Data(key.utf8)
-        item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        return SecItemAdd(item as CFDictionary, nil) == errSecSuccess
-    }
-
-    static func remove() {
-        SecItemDelete(query as CFDictionary)
-    }
-    #endif
-}
+let CloudKey = Secret(service: "com.mathetic.OmiImport.cloud", account: "omi-developer-key", debugVariable: "OMI_IMPORT_CLOUD_KEY")
 
 /// Omi's cloud: checks it for conversations the Omi app has synced, at
 /// launch, when the Mac wakes, and every half hour in between, and copies

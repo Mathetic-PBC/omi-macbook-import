@@ -88,6 +88,9 @@ public struct Recording: Codable, Equatable, Identifiable {
     public var importedAt: Date
     /// The records it was made from, so none is ever written twice.
     public var spans: [Span]?
+    /// The audio file's SHA-256, for a recording a phone handed over, so the
+    /// same one is never taken twice.
+    public var digest: String?
 
     public struct Span: Codable, Equatable {
         public var journal: String
@@ -103,7 +106,7 @@ public struct Recording: Codable, Equatable, Identifiable {
 
     public init(file: String, start: Date, seconds: Double, bytes: Int, device: String,
                 firmware: String? = nil, clockNote: String? = nil, importedAt: Date = Date(),
-                spans: [Span]? = nil) {
+                spans: [Span]? = nil, digest: String? = nil) {
         self.file = file
         self.start = start
         self.seconds = seconds
@@ -113,6 +116,7 @@ public struct Recording: Codable, Equatable, Identifiable {
         self.clockNote = clockNote
         self.importedAt = importedAt
         self.spans = spans
+        self.digest = digest
     }
 }
 

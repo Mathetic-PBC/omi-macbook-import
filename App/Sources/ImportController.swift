@@ -3,8 +3,8 @@ import Combine
 import OmiImportCore
 import SwiftUI
 
-/// The app's state: the chosen folder, Engelbart, the pendant, and what has
-/// been imported. Everything the windows and the menu show comes from here.
+/// The app's state: the chosen folder, Engelbart, the phone, Omi's cloud,
+/// and what is held. Everything the windows and the menu show comes from here.
 @MainActor
 final class ImportController: ObservableObject {
     static let shared = ImportController()
@@ -15,7 +15,11 @@ final class ImportController: ObservableObject {
     @Published private(set) var cloudStatus: String?
     @Published private(set) var cloudProblem = false
     @Published private(set) var cloudConnected = CloudKey.value?.isEmpty == false
-    @Published private(set) var pendantStatus = "Not started"
+    /// What the phone last did; nil before the app is listening.
+    @Published private(set) var phoneStatus: String?
+    @Published private(set) var phoneProblem = false
+    /// The pairing code, shown in Setup for typing into the phone.
+    @Published private(set) var phoneCode = PairingCode.value.flatMap(Pairing.normalize)
     @Published private(set) var progress: Progress?
     @Published private(set) var isTransferring = false
     @Published var engelbartQuestion: Question?
@@ -29,8 +33,8 @@ final class ImportController: ObservableObject {
         var fraction: Double { total > 0 ? min(1, Double(done) / Double(total)) : 0 }
     }
 
-    /// One line of the Recordings pane: something copied from the pendant
-    /// or from Omi's cloud.
+    /// One line of the Recordings pane: audio the phone took off the
+    /// pendant, or a conversation from Omi's cloud.
     struct Row: Identifiable, Equatable {
         var id: String { file }
         var file: String
@@ -49,7 +53,7 @@ final class ImportController: ObservableObject {
         case failed(String)
     }
 
-    private var pendant: PendantLink?
+    private var phone: PhoneLink?
     private var cloud: CloudLink?
     private var observers: [NSObjectProtocol] = []
 
@@ -67,13 +71,10 @@ final class ImportController: ObservableObject {
         let cloud = CloudLink(controller: self)
         self.cloud = cloud
         cloud.start()
-        #if DEBUG
-        // A test run that must not ask for Bluetooth.
-        if ProcessInfo.processInfo.environment["OMI_IMPORT_NO_BLUETOOTH"] == "1" { return }
-        #endif
-        let link = PendantLink(controller: self)
-        pendant = link
-        link.start(folder: settings.destinationURL, pendant: settings.pendant.flatMap(UUID.init(uuidString:)))
+        let phone = PhoneLink(controller: self)
+        self.phone = phone
+        if phoneCode == nil, settings.destination != nil { makePhoneCode() }
+        phone.restart()
     }
 
     // MARK: Folder
@@ -125,7 +126,8 @@ final class ImportController: ObservableObject {
         reloadLedger()
         refreshEngelbartStatus()
         askAboutEngelbart()
-        pendant?.setFolder(url)
+        if phoneCode == nil { makePhoneCode() }
+        phone?.restart()
         cloud?.reset()
     }
 
@@ -230,37 +232,42 @@ final class ImportController: ObservableObject {
         }
     }
 
-    // MARK: Pendant
+    // MARK: The phone
 
-    var canImportNow: Bool { settings.destination != nil && !isTransferring }
+    var canImportNow: Bool { settings.destination != nil && cloudConnected }
 
+    /// Looks at Omi's cloud now. The phone sends by itself.
     func importNow() {
-        pendant?.importNow()
         cloud?.reset()
     }
 
-    func forgetPendant() {
-        pendant?.forget()
-        settings.pendant = nil
-        settings.pendantName = nil
+    func setPhoneStatus(_ text: String?, problem: Bool = false) {
+        phoneStatus = text
+        phoneProblem = problem
     }
-
-    func setPendantStatus(_ text: String) { pendantStatus = text }
 
     func setProgress(_ value: Progress?) {
         progress = value
         isTransferring = value != nil
     }
 
-    func remember(pendant identifier: UUID, name: String) {
-        settings.pendant = identifier.uuidString
-        settings.pendantName = name
+    func didReceive(_ recording: Recording) {
+        settings.lastImport = Date()
+        reloadLedger()
     }
 
-    /// A copy finished, with or without anything new.
-    func didCheck() { settings.lastImport = Date() }
+    private func makePhoneCode() {
+        let code = Pairing.newCode()
+        guard PairingCode.save(code) else { return }
+        phoneCode = code
+    }
 
-    func didImport(_ written: [Recording]) { reloadLedger() }
+    /// A new code: the phone paired before can no longer send until it is
+    /// given this one.
+    func newPhoneCode() {
+        makePhoneCode()
+        phone?.restart()
+    }
 
     func reloadLedger() {
         guard let folder = settings.destinationURL else { rows = []; return }
@@ -304,7 +311,8 @@ final class ImportController: ObservableObject {
     func loadForSnapshot() {
         reloadLedger()
         refreshEngelbartStatus()
-        pendantStatus = ProcessInfo.processInfo.environment["OMI_IMPORT_STATUS"] ?? "Looking for your pendant"
+        phoneStatus = ProcessInfo.processInfo.environment["OMI_IMPORT_STATUS"] ?? "Waiting for your phone"
+        phoneCode = phoneCode ?? "0123456789ABCDEFGHJK"
         if let status = ProcessInfo.processInfo.environment["OMI_IMPORT_CLOUD_STATUS"] {
             cloudConnected = true
             cloudStatus = status
